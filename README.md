@@ -13,3 +13,5 @@ use at own risk, developed for internal batch processing of the remote HDFS file
 
 
 to compile you need to have referenced zlib.net package from the nuget online repository
+
+*** Current version supports only block compressed file format (SEQ6+)
