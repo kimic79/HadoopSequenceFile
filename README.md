@@ -9,3 +9,4 @@ I have used very good documentation of the interface on http://blog.cloudera.com
 thanks
 
 
+use at own risk, developed for internal batch processing of the remote HDFS files
