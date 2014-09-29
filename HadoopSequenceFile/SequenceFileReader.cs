@@ -123,6 +123,8 @@ namespace HadoopSequenceFile
             //Process sync
             if (sync != null)
             {
+                if (input.Position == input.Length)
+                    return false; //eof
                 reader.ReadInt32();
                 syncCheck = reader.ReadBytes(SYNC_HASH_SIZE);
                 if (Array.Equals(sync, syncCheck))
