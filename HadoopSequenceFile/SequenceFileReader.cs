@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -18,11 +18,12 @@ namespace HadoopSequenceFile
         private static byte VERSION_WITH_METADATA = (byte)6;        
         private static int SYNC_HASH_SIZE = 16;
         private static int SYNC_SIZE = 4 + SYNC_HASH_SIZE; // escape + hash
+        private static int SYNC_ESCAPE = -1;
         public static int SYNC_INTERVAL = 100 * SYNC_SIZE;
         private byte[] metadata = null;
         private byte[] sync = new byte[SYNC_HASH_SIZE];
         private byte[] syncCheck = new byte[SYNC_HASH_SIZE];        
-        private bool decompress;
+        private bool compressed;
         private bool blockCompressed;
         private byte version;
         private int noBufferedRecords = 0;        
@@ -31,16 +32,17 @@ namespace HadoopSequenceFile
         private DataBuffer keyBuffer = null;
         private DataBuffer valLenBuffer = null;
         private DataBuffer valBuffer = null;
-        public bool IsCompressed { get { return decompress; } }
+        public bool IsCompressed { get { return compressed; } }
         public bool IsBlockCompressed { get { return blockCompressed; } }
         public byte Version { get { return version; } }
         private string keyClassName;
-        private string valueClassName;
-
+        private string valueClassName;        
         private byte[] key = null;
         private byte[] value = null;
         public byte[] Key { get { return key; } }
         public byte[] Value { get { return value; } }
+        private bool blockIsReady = false; // block is ready to process to key-values
+        private bool syncSeen = false;
 
         public SequenceFileReader(Stream stream)
         {
@@ -60,11 +62,11 @@ namespace HadoopSequenceFile
             valueClassName = readString();
             if (version > 2)
             {                          // if version > 2
-                this.decompress = this.reader.ReadBoolean();       // is compressed?
+                this.compressed = this.reader.ReadBoolean();       // is compressed?
             }
             else
             {
-                decompress = false;
+                compressed = false;
             }
             valBuffer = new DataBuffer();
             if (version >= BLOCK_COMPRESS_VERSION)
@@ -80,7 +82,7 @@ namespace HadoopSequenceFile
             }
             // if version >= 5
             // setup the compression codec
-            if (decompress)
+            if (compressed)
             {
                 if (version >= CUSTOM_COMPRESS_VERSION)
                 {
@@ -101,9 +103,9 @@ namespace HadoopSequenceFile
             }
         }
 
-        private void readBuffer(DataBuffer buffer)
+        private void readCompressedBuffer(DataBuffer buffer)
         {
-            var buf = readBuffer();
+            var buf = readCompressedBuffer();
             buffer.Set(buf, 0, buf.Length);
         }
 
@@ -115,41 +117,91 @@ namespace HadoopSequenceFile
             return Encoding.UTF8.GetString(strbuf);
         }
 
-        private bool readBlock()
+        private bool readCompressedBlock()
         {
             // Reset internal states            
             noBufferedRecords = 0;
             keyPosition = 0;
-            //Process sync
-            if (sync != null)
+            //Process sync           
+            if (input.Position == input.Length)
+                return false; //eof            
+            if (version > 1 && sync != null)
             {
-                if (input.Position == input.Length)
-                    return false; //eof
-                reader.ReadInt32();
+                reader.ReadInt32(); // skip 4 bytes
                 syncCheck = reader.ReadBytes(SYNC_HASH_SIZE);
-                if (Array.Equals(sync, syncCheck))
+                if (!sync.SequenceEqual(syncCheck))
                     throw new IOException("File is corrupt!");
+                if (input.Position == input.Length)
+                    return false; //eof           
             }
             // Read number of records in this block
             noBufferedRecords = Tools.ReadVInt(input);
 
             // Read key lengths and keys
-            readBuffer(keyLenBuffer);
-            readBuffer(keyBuffer);
-            readBuffer(valLenBuffer);
-            readBuffer(valBuffer);
-            
-            return true; // eof??
+            readCompressedBuffer(keyLenBuffer);
+            readCompressedBuffer(keyBuffer);
+            readCompressedBuffer(valLenBuffer);
+            readCompressedBuffer(valBuffer);
+            blockIsReady = true;
+            return true;
         }
 
-        private byte[] readBuffer()
+
+        private int readRecordLength()
+        {
+            if (input.Position >= input.Length)
+                return -1;
+
+            int length = Tools.ReadInt(input);
+            if (version > 1 && sync != null && length == SYNC_ESCAPE)
+            {
+                // process a sync entry
+                syncCheck = reader.ReadBytes(SYNC_HASH_SIZE);
+                if (!sync.SequenceEqual(syncCheck))
+                    throw new IOException("File is corrupt!");
+                syncSeen = true;
+                if (input.Position >= input.Length)
+                    return -1;
+                length = Tools.ReadInt(input); // re-read length
+            }
+            else
+            {
+                syncSeen = false;
+            }
+            return length;
+        }
+      
+        private bool readCompressedRecord()
+        {
+            if (input.Position == input.Length)
+                return false; //eof
+            // Read record length
+            var recordLength = readRecordLength();
+            // Read key length            
+            var keyLength = Tools.ReadInt(input);           
+            if (recordLength < 0 || keyLength < 0)
+                throw new Exception("Broken data length");
+            // Read key
+            this.key = new byte[keyLength];
+            input.Read(key, 0, keyLength);
+            // Read value
+            this.value = readCompressedBuffer(recordLength - keyLength);
+            return true;
+        }
+
+        private byte[] readCompressedBuffer()
         {
             var zLength = Tools.ReadVInt(input);
+            return readCompressedBuffer(zLength);
+        }
+
+        private byte[] readCompressedBuffer(int zLength)
+        {
             byte[] compressed = new byte[zLength];
             input.Read(compressed, 0, zLength);
             MemoryStream zinput = new MemoryStream(compressed);
             MemoryStream uncompressed = new MemoryStream(zLength);
-            
+
             using (var zstream = new zlib.ZInputStream(zinput))
             {
                 byte[] buf = new byte[1024];
@@ -161,11 +213,24 @@ namespace HadoopSequenceFile
                 uncompressed.Flush();
             }
             return uncompressed.ToArray();
-        }
+        }        
 
         public bool Read()
         {
-            return readBlock();
+            if (IsBlockCompressed)
+            {
+                return ReadBlockKeyValue();
+            }
+            else if (IsCompressed)
+            {
+                return readCompressedRecord();
+            }
+            return readRecord();
+        }
+
+        private bool readRecord()
+        {
+            throw new NotImplementedException("Uncompressed not implemented");
         }
 
         public void Dispose()
@@ -173,25 +238,35 @@ namespace HadoopSequenceFile
             this.reader.Dispose();
         }
 
-        public bool ReadKeyValue()
+        public bool ReadBlockKeyValue()
         {
-            try
+            if (IsBlockCompressed)
             {
-                if (keyPosition == noBufferedRecords) // end of block
-                    return false;
-                if (keyLenBuffer.EOF || keyBuffer.EOF || valLenBuffer.EOF || valBuffer.EOF)
-                    throw new Exception("Source block has invalid number of assigned key or value buffers");
-                int klen = keyLenBuffer.GetVInt();
-                this.key = keyBuffer.GetBytes(klen);
-                int vlen = valLenBuffer.GetVInt();
-                this.value = valBuffer.GetBytes(vlen);
-                keyPosition++;
-                return true;
+                try
+                {
+                    // initial load
+                    if (!blockIsReady)  
+                        if (!readCompressedBlock())
+                            return false;  // no more records ready
+                        
+                    if (keyLenBuffer.EOF || keyBuffer.EOF || valLenBuffer.EOF || valBuffer.EOF)
+                        throw new Exception("Source block has invalid number of assigned key or value buffers");
+                    int klen = keyLenBuffer.GetVInt();
+                    this.key = keyBuffer.GetBytes(klen);
+                    int vlen = valLenBuffer.GetVInt();
+                    this.value = valBuffer.GetBytes(vlen);
+                    keyPosition++;
+
+                    if (keyPosition == noBufferedRecords)
+                        blockIsReady = false;         // end of block           
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception(string.Format("Unable to get element {0}: {1}", keyLenBuffer.Position, ex.Message), ex);
+                }
             }
-            catch (Exception ex)
-            {
-                throw new Exception(string.Format("Unable to get element {0}: {1}", keyLenBuffer.Position, ex.Message), ex);
-            }
+            return false;
         }
     }
 }
