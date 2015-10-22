@@ -9,7 +9,15 @@ namespace HadoopSequenceFile
 {
     public class Tools
     {
-      
+        public static int ReadInt(Stream stream)
+        {
+            var buf = new byte[4];
+            buf[3] = (byte)stream.ReadByte();
+            buf[2] = (byte)stream.ReadByte();
+            buf[1] = (byte)stream.ReadByte();
+            buf[0] = (byte)stream.ReadByte();
+            return BitConverter.ToInt32(buf, 0);
+        }
 
         public static int ReadVInt(Stream stream)
         {
