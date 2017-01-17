@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -91,7 +91,8 @@ namespace HadoopSequenceFile
                         throw new Exception("Unknown codec " + codecClassname);
                 }
 
-
+            }
+            { 
                 if (version >= VERSION_WITH_METADATA)
                 {    // if version >= 6
                     this.metadata = reader.ReadBytes(4);
@@ -230,7 +231,30 @@ namespace HadoopSequenceFile
 
         private bool readRecord()
         {
-            throw new NotImplementedException("Uncompressed not implemented");
+            if (input.Position == input.Length)
+                return false; //eof
+            // Read record length
+            var recordLength = readRecordLength();
+            // Read key length            
+            var keyLength = Tools.ReadInt(input);
+            if (recordLength < 0 || keyLength < 0)
+                throw new Exception("Broken data length");            
+            // Read key
+            this.key = new byte[keyLength];
+            input.Read(key, 0, keyLength);
+            // Read value
+            if (valueClassName == "org.apache.hadoop.io.Text")
+            {
+                var res = readString();
+                this.value = Encoding.UTF8.GetBytes(res);
+            }
+            else
+            {
+                byte[] content = new byte[recordLength - keyLength];
+                input.Read(content, 0, recordLength - keyLength);
+                this.value = content;
+            }
+            return true;
         }
 
         public void Dispose()

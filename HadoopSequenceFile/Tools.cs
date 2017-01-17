@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using zlib;
 
 namespace HadoopSequenceFile
 {
@@ -42,6 +43,54 @@ namespace HadoopSequenceFile
             return (IsNegativeVInt(firstByte) ? (i ^ -1L) : i);
         }
 
+        public static void WriteVInt(Stream stream, int i)
+        {
+            WriteVLong(stream, i);
+        }
+
+
+        public static void WriteVLong(Stream stream, long i)
+        {
+            if (i >= -112 && i <= 127)
+            {
+                stream.WriteByte((byte)i);
+                return;
+            }
+
+            int len = -112;
+            if (i < 0)
+            {
+                i ^= -1L; // take one's complement'
+                len = -120;
+            }
+
+            long tmp = i;
+            while (tmp != 0)
+            {
+                tmp = tmp >> 8;
+                len--;
+            }
+
+            stream.WriteByte((byte)len);
+
+            len = (len < -120) ? -(len + 120) : -(len + 112);
+
+            for (int idx = len; idx != 0; idx--)
+            {
+                int shiftbits = (idx - 1) * 8;
+                long mask = 0xFFL << shiftbits;
+                stream.WriteByte((byte)((i & mask) >> shiftbits));
+            }
+        }
+
+        public static void WriteInt(Stream stream, int i)
+        {            
+            byte[] intBytes = BitConverter.GetBytes(i);
+            Array.Reverse(intBytes);
+            stream.Write(intBytes, 0, 4);            
+
+        }
+
         public static bool IsNegativeVInt(int value)
         {
             return value < -120 || (value >= -112 && value < 0);
@@ -59,5 +108,29 @@ namespace HadoopSequenceFile
             }
             return -111 - value;
         }
+
+        public static void Compress(byte[] inData, out byte[] outData)
+        {
+            using (MemoryStream outMemoryStream = new MemoryStream())
+            using (ZOutputStream outZStream = new ZOutputStream(outMemoryStream, zlibConst.Z_DEFAULT_COMPRESSION))
+            using (Stream inMemoryStream = new MemoryStream(inData))
+            {
+                CopyStream(inMemoryStream, outZStream);
+                outZStream.finish();
+                outData = outMemoryStream.ToArray();
+            }
+        }
+
+        public static void CopyStream(System.IO.Stream input, System.IO.Stream output)
+        {
+            byte[] buffer = new byte[2000];
+            int len;
+            while ((len = input.Read(buffer, 0, 2000)) > 0)
+            {
+                output.Write(buffer, 0, len);
+            }
+            output.Flush();
+        }
+
     }
 }

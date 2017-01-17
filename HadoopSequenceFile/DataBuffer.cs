@@ -8,22 +8,24 @@ using System.Threading.Tasks;
 namespace HadoopSequenceFile
 {
     public class DataBuffer
-    {
-        private byte[] buffer;                
-        private int pos;
+    {        
+        private MemoryStream stream = new MemoryStream();
 
-        public int Position { get { return pos; } }                
-
+        public long Position { get { return stream.Position; } }                
+        public long Length { get { return stream.Length; } }
         public DataBuffer()
         {
-            this.buffer = new byte[0];
+            this.stream = new MemoryStream();
         }
 
         public DataBuffer(int size)
         {
-            this.buffer = new byte[size];
+            this.stream = new MemoryStream(size);
         }
-        public bool EOF { get { return pos >= buffer.Length; } }
+        public bool EOF
+        {
+            get { return Position >= stream.Length; }
+        }
 
         public void Clear()
         {
@@ -31,14 +33,12 @@ namespace HadoopSequenceFile
         }
         public void Set(byte[] input, int start, int length)
         {
-            this.buffer = input;                        
-            this.pos = start;
+            this.stream = new MemoryStream(input);            
         }
 
         private byte getByte()
         {
-            var res = buffer[pos];
-            pos++;
+            var res = Convert.ToByte(stream.ReadByte());
             return res;
         }
         internal int GetVInt()
@@ -66,9 +66,44 @@ namespace HadoopSequenceFile
         internal byte[] GetBytes(int length)
         {
             byte[] buf = new byte[length];
-            Array.Copy(buffer, pos, buf, 0, length);
-            pos += length;
+            int rcnt = stream.Read(buf, 0, length);            
             return buf;
         }
+
+        public void AddVInt(int l)
+        {
+            Tools.WriteVInt(stream, l);
+        }
+
+        public void AddVLong(long l)
+        {
+            Tools.WriteVLong(stream, l);
+        }
+
+        public int AddData(byte[] data, bool compress = false)
+        {
+            if (compress)
+            {
+                byte[] content;
+                Tools.Compress(data, out content);
+                stream.Write(content, 0, content.Length);
+                return content.Length;
+            } else
+            {
+                stream.Write(data, 0, data.Length);
+                return data.Length;
+            }
+        }
+
+        public void Write(Stream outputStream)
+        {            
+            stream.CopyTo(outputStream);            
+        }
+
+        public byte[] ToArray()
+        {
+            stream.Seek(0, 0);
+            return stream.ToArray();
+        }       
     }
 }
