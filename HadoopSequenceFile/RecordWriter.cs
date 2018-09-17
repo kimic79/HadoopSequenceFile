@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.IO;
 
 namespace HadoopSequenceFile
 {
@@ -12,7 +7,7 @@ namespace HadoopSequenceFile
         protected override bool isBlockCompressed
         {
             get
-            {                
+            {
                 return false;
             }
         }
@@ -38,7 +33,7 @@ namespace HadoopSequenceFile
             writeInt(key.Length + value.Length);
             writeInt(key.Length);
             writeBytes(key);
-            writeBytes(value);            
+            writeBytes(value);
         }
     }
 }

@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.IO;
 
 namespace HadoopSequenceFile
 {
@@ -25,10 +20,10 @@ namespace HadoopSequenceFile
             }
         }
 
-        public RecordCompressWriter(Stream stream, string keyClassName = "org.apache.hadoop.io.BytesWritable", string valueClassName = "org.apache.hadoop.io.BytesWritable") 
+        public RecordCompressWriter(Stream stream, string keyClassName = "org.apache.hadoop.io.BytesWritable", string valueClassName = "org.apache.hadoop.io.BytesWritable")
             : base(stream, CompressionFileType.Compressed, keyClassName, valueClassName)
         {
-            
+
         }
 
         protected override void append(byte[] key, byte[] value)
@@ -39,8 +34,8 @@ namespace HadoopSequenceFile
             writeInt(content.Length + key.Length);
             writeInt(key.Length);
             writeBytes(key);
-            writeBytes(content);            
+            writeBytes(content);
         }
-      
+
     }
 }

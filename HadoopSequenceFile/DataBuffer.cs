@@ -1,17 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace HadoopSequenceFile
 {
     public class DataBuffer
-    {        
+    {
         private MemoryStream stream = new MemoryStream();
 
-        public long Position { get { return stream.Position; } }                
+        public long Position { get { return stream.Position; } }
         public long Length { get { return stream.Length; } }
         public DataBuffer()
         {
@@ -33,7 +29,7 @@ namespace HadoopSequenceFile
         }
         public void Set(byte[] input, int start, int length)
         {
-            this.stream = new MemoryStream(input);            
+            this.stream = new MemoryStream(input);
         }
 
         private byte getByte()
@@ -66,7 +62,7 @@ namespace HadoopSequenceFile
         internal byte[] GetBytes(int length)
         {
             byte[] buf = new byte[length];
-            int rcnt = stream.Read(buf, 0, length);            
+            int rcnt = stream.Read(buf, 0, length);
             return buf;
         }
 
@@ -96,14 +92,14 @@ namespace HadoopSequenceFile
         }
 
         public void Write(Stream outputStream)
-        {            
-            stream.CopyTo(outputStream);            
+        {
+            stream.CopyTo(outputStream);
         }
 
         public byte[] ToArray()
         {
             stream.Seek(0, 0);
             return stream.ToArray();
-        }       
+        }
     }
 }
