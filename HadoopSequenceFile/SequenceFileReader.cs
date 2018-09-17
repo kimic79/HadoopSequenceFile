@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using zlib;
@@ -9,6 +10,9 @@ namespace HadoopSequenceFile
 {
     public class SequenceFileReader : IDisposable
     {
+        private const string HadoopCompressGzipCodec = "org.apache.hadoop.io.compress.GzipCodec";
+        private const string HadoopCompressDefaultCodec = "org.apache.hadoop.io.compress.DefaultCodec";
+
         private Stream input;
         private KeyValuePair<byte[], byte[]> _dataKV = new KeyValuePair<byte[], byte[]>();
         private BinaryReader reader;
@@ -24,6 +28,7 @@ namespace HadoopSequenceFile
         private byte[] sync = new byte[SYNC_HASH_SIZE];
         private byte[] syncCheck = new byte[SYNC_HASH_SIZE];
         private bool compressed;
+        private bool zlibCompressed;
         private bool blockCompressed;
         private byte version;
         private int noBufferedRecords = 0;
@@ -87,8 +92,10 @@ namespace HadoopSequenceFile
                 if (version >= CUSTOM_COMPRESS_VERSION)
                 {
                     string codecClassname = readString();
-                    if (codecClassname != "org.apache.hadoop.io.compress.DefaultCodec")
+                    if (codecClassname != HadoopCompressDefaultCodec && codecClassname != HadoopCompressGzipCodec)
                         throw new Exception("Unknown codec " + codecClassname);
+                    zlibCompressed = codecClassname == HadoopCompressDefaultCodec;
+                    blockCompressed = codecClassname == HadoopCompressGzipCodec;
                 }
 
             }
@@ -203,15 +210,33 @@ namespace HadoopSequenceFile
             MemoryStream zinput = new MemoryStream(compressed);
             MemoryStream uncompressed = new MemoryStream(zLength);
 
-            using (var zstream = new zlib.ZInputStream(zinput))
+            if (zlibCompressed)
             {
-                byte[] buf = new byte[1024];
-                int len = 0;
-                while ((len = zstream.read(buf, 0, buf.Length)) > 0)
+                using (var zstream = new zlib.ZInputStream(zinput))
                 {
-                    uncompressed.Write(buf, 0, len);
+                    byte[] buf = new byte[1024];
+                    int len = 0;
+                    while ((len = zstream.read(buf, 0, buf.Length)) > 0)
+                    {
+                        uncompressed.Write(buf, 0, len);
+                    }
+
+                    uncompressed.Flush();
                 }
-                uncompressed.Flush();
+            }
+            else
+            {
+                using (var gZipStream = new GZipStream(zinput, CompressionMode.Decompress))
+                {
+                    byte[] buf = new byte[1024];
+                    int len = 0;
+                    while ((len = gZipStream.Read(buf, 0, buf.Length)) > 0)
+                    {
+                        uncompressed.Write(buf, 0, len);
+                    }
+
+                    uncompressed.Flush();
+                }
             }
             return uncompressed.ToArray();
         }
@@ -273,7 +298,7 @@ namespace HadoopSequenceFile
                         if (!readCompressedBlock())
                             return false;  // no more records ready
 
-                    if (keyLenBuffer.EOF || keyBuffer.EOF || valLenBuffer.EOF || valBuffer.EOF)
+                    if (keyLenBuffer.EOF || keyBuffer.EOF || valLenBuffer.EOF || (valBuffer.EOF && zlibCompressed))
                         throw new Exception("Source block has invalid number of assigned key or value buffers");
                     int klen = keyLenBuffer.GetVInt();
                     this.key = keyBuffer.GetBytes(klen);
