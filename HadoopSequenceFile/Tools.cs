@@ -1,9 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using zlib;
 
 namespace HadoopSequenceFile
@@ -84,10 +80,10 @@ namespace HadoopSequenceFile
         }
 
         public static void WriteInt(Stream stream, int i)
-        {            
+        {
             byte[] intBytes = BitConverter.GetBytes(i);
             Array.Reverse(intBytes);
-            stream.Write(intBytes, 0, 4);            
+            stream.Write(intBytes, 0, 4);
 
         }
 
@@ -121,7 +117,7 @@ namespace HadoopSequenceFile
             }
         }
 
-        public static void CopyStream(System.IO.Stream input, System.IO.Stream output)
+        public static void CopyStream(Stream input, Stream output)
         {
             byte[] buffer = new byte[2000];
             int len;

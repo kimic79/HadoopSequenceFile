@@ -3,31 +3,31 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using zlib;
 
 namespace HadoopSequenceFile
 {
     public class SequenceFileReader : IDisposable
     {
-        private Stream input;        
+        private Stream input;
         private KeyValuePair<byte[], byte[]> _dataKV = new KeyValuePair<byte[], byte[]>();
         private BinaryReader reader;
         public KeyValuePair<byte[], byte[]> Data { get { return _dataKV; } }
         private static byte BLOCK_COMPRESS_VERSION = (byte)4;
         private static byte CUSTOM_COMPRESS_VERSION = (byte)5;
-        private static byte VERSION_WITH_METADATA = (byte)6;        
+        private static byte VERSION_WITH_METADATA = (byte)6;
         private static int SYNC_HASH_SIZE = 16;
         private static int SYNC_SIZE = 4 + SYNC_HASH_SIZE; // escape + hash
         private static int SYNC_ESCAPE = -1;
         public static int SYNC_INTERVAL = 100 * SYNC_SIZE;
         private byte[] metadata = null;
         private byte[] sync = new byte[SYNC_HASH_SIZE];
-        private byte[] syncCheck = new byte[SYNC_HASH_SIZE];        
+        private byte[] syncCheck = new byte[SYNC_HASH_SIZE];
         private bool compressed;
         private bool blockCompressed;
         private byte version;
-        private int noBufferedRecords = 0;        
-        private int keyPosition = 0;        
+        private int noBufferedRecords = 0;
+        private int keyPosition = 0;
         private DataBuffer keyLenBuffer = null;
         private DataBuffer keyBuffer = null;
         private DataBuffer valLenBuffer = null;
@@ -36,7 +36,7 @@ namespace HadoopSequenceFile
         public bool IsBlockCompressed { get { return blockCompressed; } }
         public byte Version { get { return version; } }
         private string keyClassName;
-        private string valueClassName;        
+        private string valueClassName;
         private byte[] key = null;
         private byte[] value = null;
         public byte[] Key { get { return key; } }
@@ -92,7 +92,7 @@ namespace HadoopSequenceFile
                 }
 
             }
-            { 
+            {
                 if (version >= VERSION_WITH_METADATA)
                 {    // if version >= 6
                     this.metadata = reader.ReadBytes(4);
@@ -120,12 +120,12 @@ namespace HadoopSequenceFile
 
         private bool readCompressedBlock()
         {
-            // Reset internal states            
+            // Reset internal states
             noBufferedRecords = 0;
             keyPosition = 0;
-            //Process sync           
+            //Process sync
             if (input.Position == input.Length)
-                return false; //eof            
+                return false; //eof
             if (version > 1 && sync != null)
             {
                 reader.ReadInt32(); // skip 4 bytes
@@ -133,7 +133,7 @@ namespace HadoopSequenceFile
                 if (!sync.SequenceEqual(syncCheck))
                     throw new IOException("File is corrupt!");
                 if (input.Position == input.Length)
-                    return false; //eof           
+                    return false; //eof
             }
             // Read number of records in this block
             noBufferedRecords = Tools.ReadVInt(input);
@@ -171,15 +171,15 @@ namespace HadoopSequenceFile
             }
             return length;
         }
-      
+
         private bool readCompressedRecord()
         {
             if (input.Position == input.Length)
                 return false; //eof
             // Read record length
             var recordLength = readRecordLength();
-            // Read key length            
-            var keyLength = Tools.ReadInt(input);           
+            // Read key length
+            var keyLength = Tools.ReadInt(input);
             if (recordLength < 0 || keyLength < 0)
                 throw new Exception("Broken data length");
             // Read key
@@ -214,7 +214,7 @@ namespace HadoopSequenceFile
                 uncompressed.Flush();
             }
             return uncompressed.ToArray();
-        }        
+        }
 
         public bool Read()
         {
@@ -235,10 +235,10 @@ namespace HadoopSequenceFile
                 return false; //eof
             // Read record length
             var recordLength = readRecordLength();
-            // Read key length            
+            // Read key length
             var keyLength = Tools.ReadInt(input);
             if (recordLength < 0 || keyLength < 0)
-                throw new Exception("Broken data length");            
+                throw new Exception("Broken data length");
             // Read key
             this.key = new byte[keyLength];
             input.Read(key, 0, keyLength);
@@ -269,10 +269,10 @@ namespace HadoopSequenceFile
                 try
                 {
                     // initial load
-                    if (!blockIsReady)  
+                    if (!blockIsReady)
                         if (!readCompressedBlock())
                             return false;  // no more records ready
-                        
+
                     if (keyLenBuffer.EOF || keyBuffer.EOF || valLenBuffer.EOF || valBuffer.EOF)
                         throw new Exception("Source block has invalid number of assigned key or value buffers");
                     int klen = keyLenBuffer.GetVInt();
@@ -282,7 +282,7 @@ namespace HadoopSequenceFile
                     keyPosition++;
 
                     if (keyPosition == noBufferedRecords)
-                        blockIsReady = false;         // end of block           
+                        blockIsReady = false;         // end of block
                     return true;
                 }
                 catch (Exception ex)

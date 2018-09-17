@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace HadoopSequenceFile
 {
@@ -23,7 +21,7 @@ namespace HadoopSequenceFile
         private long lastSyncPos = 0;
         private byte[] metadata = new byte[4];
         private byte[] sync = new byte[SYNC_HASH_SIZE];
-        private byte[] syncCheck = new byte[SYNC_HASH_SIZE];        
+        private byte[] syncCheck = new byte[SYNC_HASH_SIZE];
         private byte version;
         private int noBufferedRecords = 0;
         private int keyPosition = 0;
@@ -51,7 +49,7 @@ namespace HadoopSequenceFile
             initHeader();
         }
 
-        protected abstract void append(byte[] key, byte[] value);        
+        protected abstract void append(byte[] key, byte[] value);
 
         public void Append(byte[] key, byte[] value)
         {
@@ -81,7 +79,7 @@ namespace HadoopSequenceFile
                 }
             }
             if (version >= VERSION_WITH_METADATA)
-            {    // if version >= 6                 
+            {    // if version >= 6
                 writer.Write(metadata, 0, metadata.Length);
             }
             if (version > 1)
@@ -129,9 +127,9 @@ namespace HadoopSequenceFile
             Tools.WriteVLong(output, value);
         }
         public void Close()
-        {            
+        {
             if (writer != null)
-            {                
+            {
                 writer.Close();
                 writer.Dispose();
                 writer = null;
@@ -142,7 +140,7 @@ namespace HadoopSequenceFile
         {
             output.Write(input, 0, input.Length);
             return input.Length;
-        }       
+        }
 
         protected void writeString(string content)
         {
@@ -155,14 +153,14 @@ namespace HadoopSequenceFile
         {
             using (var ms = new MemoryStream())
             {
-                Tools.WriteVInt(ms, content.Length);                
+                Tools.WriteVInt(ms, content.Length);
                 ms.Write(content, 0, content.Length);
                 return ms.ToArray();
             }
         }
         public void Flush()
         {
-            flush();            
+            flush();
             if (writer != null)
             {
                 writer.Flush();

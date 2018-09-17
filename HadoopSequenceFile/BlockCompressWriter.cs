@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.IO;
 
 namespace HadoopSequenceFile
 {
@@ -33,14 +28,14 @@ namespace HadoopSequenceFile
             }
         }
 
-        public BlockCompressWriter(Stream stream, int blockRecMax = 100, string keyClassName = "org.apache.hadoop.io.BytesWritable", string valueClassName = "org.apache.hadoop.io.BytesWritable") 
+        public BlockCompressWriter(Stream stream, int blockRecMax = 100, string keyClassName = "org.apache.hadoop.io.BytesWritable", string valueClassName = "org.apache.hadoop.io.BytesWritable")
             : base(stream, CompressionFileType.BlockCompressed, keyClassName, valueClassName)
         {
-            this.blockRecMax = blockRecMax;   
+            this.blockRecMax = blockRecMax;
         }
 
         protected override void append(byte[] key, byte[] value)
-        {            
+        {
             keyLenBuffer.AddVInt(keyBuffer.AddData(key, true));
             valLenBuffer.AddVInt(valBuffer.AddData(value, true));
             numberOfRecords++;
@@ -66,13 +61,13 @@ namespace HadoopSequenceFile
         private void writeBuffer(DataBuffer buffer)
         {
             var data = buffer.ToArray();
-            writer.Write(data, 0, data.Length);            
-            buffer.Clear();            
+            writer.Write(data, 0, data.Length);
+            buffer.Clear();
         }
 
         protected override void flush()
-        {            
-            writeBuffers();            
+        {
+            writeBuffers();
         }
     }
 }
